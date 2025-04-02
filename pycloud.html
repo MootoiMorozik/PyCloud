@@ -564,7 +564,8 @@
             const shapes = ['circle', 'triangle', 'square', 'pentagon'];
             let isDarkTheme = false;
             
-            const redirectUrl = 'https://google.com';
+            // Изменено: перенаправление на index.html после успешной проверки
+            const redirectUrl = 'index.html';
             
             function checkSystemTheme() {
                 const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -628,6 +629,7 @@
                         setTimeout(() => {
                             captchaOverlay.style.display = 'none';
                             document.body.style.overflow = 'auto';
+                            // Перенаправление на index.html
                             window.location.href = redirectUrl;
                         }, 300);
                     }, 700);
