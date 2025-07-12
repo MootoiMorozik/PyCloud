@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PyCloud</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            overflow: hidden;
+            background: #f5f5f5;
+            transition: background 0.5s ease;
+        }
+        
+        #captcha-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.98);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            transition: opacity 0.3s ease, background 0.5s ease;
+        }
+        
+        .captcha-container {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            width: 260px;
+            max-width: 90%;
+            text-align: center;
+            border: 1px solid #e0e0e0;
+            transform: scale(0.95);
+            opacity: 0;
+            animation: containerFadeIn 0.4s ease forwards 0.2s;
+            transition: all 0.3s ease, background 0.5s ease, border-color 0.5s ease;
+        }
+        
+        .captcha-widget {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+        }
+        
+        .captcha-box {
+            width: 18px;
+            height: 18px;
+            border: 2px solid #ccc;
+            border-radius: 3px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            flex-shrink: 0;
+        }
+        
+        .captcha-box:hover {
+            transform: scale(1.1);
+            border-color: #999;
+        }
+        
+        .captcha-box.verified {
+            background-color: #4CAF50;
+            border-color: #4CAF50;
+            cursor: default;
+            transform: scale(1);
+        }
+        
+        .captcha-box.verified::after {
+            content: "✓";
+            position: absolute;
+            color: white;
+            font-size: 12px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation: fadeIn 0.3s ease;
+        }
+        
+        .captcha-box.loading::after {
+            content: "";
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #4CAF50, #8BC34A);
+            width: 0%;
+            animation: progress var(--progress-time) linear forwards;
+        }
+        
+        .captcha-text {
+            margin: 0;
+            font-size: 14px;
+            color: #555;
+            user-select: none;
+            transition: all 0.3s ease;
+        }
+        
+        .captcha-text.verified {
+            color: #4CAF50;
+            font-weight: 500;
+        }
+        
+        .captcha-footer {
+            font-size: 11px;
+            color: #999;
+            margin-top: 15px;
+            opacity: 0;
+            transform: translateY(5px);
+            animation: fadeInFooter 0.4s ease forwards 0.6s;
+            transition: color 0.5s ease;
+        }
+        
+        #theme-toggle-container {
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            z-index: 10001;
+        }
+        
+        .theme-toggle {
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ddd;
+            color: #666;
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            transform: translateY(20px);
+            opacity: 0;
+            animation: themeToggleFadeIn 0.5s ease forwards 0.8s;
+        }
+        
+        .theme-toggle:hover {
+            background: #fff;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+            transform: translateY(0) scale(1.05);
+        }
+        
+        .shape-verification {
+            display: none;
+            margin-top: 12px;
+            animation: fadeIn 0.4s ease;
+        }
+        
+        .target-shape-container {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 12px;
+            border: 1px dashed #ddd;
+            border-radius: 5px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #f9f9f9;
+            overflow: hidden;
+            transition: all 0.3s ease, border-color 0.5s ease, background 0.5s ease;
+            transform: scale(0.9);
+            opacity: 0;
+        }
+        
+        .target-shape {
+            position: relative;
+            width: 60px;
+            height: 60px;
+            transition: transform 0.3s ease;
+        }
+        
+        .shape-options {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px;
+            margin-top: 10px;
+            transform: translateY(10px);
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+        
+        .shape-option {
+            width: 100%;
+            aspect-ratio: 1;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f8f8f8;
+            padding: 4px;
+            box-sizing: border-box;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .shape-option:hover {
+            background-color: #f0f0f0;
+            transform: translateY(-3px) scale(1.03);
+        }
+        
+        .shape-option.selected {
+            border-color: #4CAF50;
+            background-color: #e8f5e9;
+            transform: scale(1.05);
+        }
+        
+        .shape-option.incorrect {
+            border-color: #f44336;
+            background-color: #ffebee;
+            animation: shake 0.4s ease;
+        }
+        
+        .verification-text {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 10px;
+            line-height: 1.3;
+            transition: color 0.5s ease;
+        }
+        
+        .verification-error {
+            color: #f44336;
+            font-size: 11px;
+            margin-top: 6px;
+            display: none;
+            opacity: 0;
+            transform: translateY(-5px);
+            transition: all 0.3s ease;
+        }
+        
+        .verification-success {
+            color: #4CAF50;
+            font-size: 12px;
+            margin-top: 6px;
+            display: none;
+            font-weight: 500;
+            opacity: 0;
+            transform: translateY(-5px);
+            transition: all 0.3s ease;
+        }
+        
+        .shape {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background-color: #e0e0e0;
+            z-index: 2;
+            transition: all 0.3s ease, background-color 0.5s ease;
+        }
+        
+        .circle {
+            border-radius: 50%;
+        }
+        
+        .triangle {
+            clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+        }
+        
+        .square {
+            border-radius: 0;
+        }
+        
+        .pentagon {
+            clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+        }
+        
+        .noise-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px);
+            background-size: 3px 3px;
+            z-index: 1;
+        }
+        
+        .dynamic-noise {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.05) 100%),
+                repeating-linear-gradient(
+                    45deg,
+                    rgba(0,0,0,0.02),
+                    rgba(0,0,0,0.02) 1px,
+                    transparent 1px,
+                    transparent 3px
+                );
+            animation: noiseAnim 0.2s infinite;
+            z-index: 3;
+            pointer-events: none;
+        }
+        
+        .random-lines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                repeating-linear-gradient(
+                    0deg,
+                    transparent,
+                    transparent 1px,
+                    rgba(0,0,0,0.02) 1px,
+                    rgba(0,0,0,0.02) 2px
+                );
+            z-index: 4;
+            pointer-events: none;
+        }
+        
+        .color-flicker {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            animation: colorFlicker 5s infinite alternate;
+            mix-blend-mode: overlay;
+            z-index: 5;
+            pointer-events: none;
+            opacity: 0.1;
+        }
+        
+        body.dark-theme {
+            background: #121212;
+        }
+        
+        body.dark-theme #captcha-overlay {
+            background: rgba(30, 30, 30, 0.98);
+        }
+        
+        body.dark-theme .captcha-container {
+            background: #2d2d2d;
+            border-color: #444;
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        body.dark-theme .captcha-text {
+            color: #ccc;
+        }
+        
+        body.dark-theme .captcha-box {
+            border-color: #666;
+        }
+        
+        body.dark-theme .captcha-footer {
+            color: #777;
+        }
+        
+        body.dark-theme .theme-toggle {
+            background: rgba(40, 40, 40, 0.9);
+            border-color: #444;
+            color: #aaa;
+        }
+        
+        body.dark-theme .theme-toggle:hover {
+            background: rgba(50, 50, 50, 0.95);
+        }
+        
+        body.dark-theme .target-shape-container {
+            border-color: #444;
+            background: #333;
+        }
+        
+        body.dark-theme .shape-option {
+            border-color: #444;
+            background-color: #333;
+        }
+        
+        body.dark-theme .shape-option:hover {
+            background-color: #3a3a3a;
+        }
+        
+        body.dark-theme .shape-option.selected {
+            border-color: #4CAF50;
+            background-color: #2d3a2e;
+        }
+        
+        body.dark-theme .shape-option.incorrect {
+            border-color: #f44336;
+            background-color: #3a2a2b;
+        }
+        
+        body.dark-theme .verification-text {
+            color: #aaa;
+        }
+        
+        body.dark-theme .shape {
+            background-color: #555;
+        }
+        
+        @keyframes containerFadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        
+        @keyframes fadeInFooter {
+            from {
+                opacity: 0;
+                transform: translateY(5px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes themeToggleFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes progress {
+            to { width: 100%; }
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-3px); }
+            40%, 80% { transform: translateX(3px); }
+        }
+        
+        @keyframes noiseAnim {
+            0% { transform: translate(0,0); }
+            100% { background-position: 3px 3px; }
+        }
+        
+        @keyframes colorFlicker {
+            0% { background: rgba(255,0,0,0.05); }
+            20% { background: rgba(0,255,0,0.05); }
+            40% { background: rgba(0,0,255,0.05); }
+            60% { background: rgba(255,255,0,0.05); }
+            80% { background: rgba(0,255,255,0.05); }
+            100% { background: rgba(255,0,255,0.05); }
+        }
+        
+        @keyframes shapeOptionsAppear {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes targetShapeAppear {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="captcha-overlay">
+        <div class="captcha-container">
+            <div class="captcha-widget">
+                <div class="captcha-box" id="captchaBox"></div>
+                <span class="captcha-text" id="captchaText">I'm not a robot</span>
+            </div>
+            
+            <div class="shape-verification" id="shapeVerification">
+                <p class="verification-text">Select the matching shape:</p>
+                
+                <div class="target-shape-container" id="targetShapeContainer">
+                    <div class="noise-overlay"></div>
+                    <div class="dynamic-noise"></div>
+                    <div class="random-lines"></div>
+                    <div class="color-flicker"></div>
+                    <div class="target-shape" id="targetShape">
+                        <div class="shape" id="targetShapeInner"></div>
+                    </div>
+                </div>
+                
+                <div class="shape-options" id="shapeOptions">
+                </div>
+                
+                <div class="verification-error" id="verificationError">
+                    Wrong shape. Try again.
+                </div>
+                
+                <div class="verification-success" id="verificationSuccess">
+                    Verified successfully!
+                </div>
+            </div>
+            
+            <div class="captcha-footer">
+                Protected by PyCloud
+            </div>
+        </div>
+    </div>
+
+    <div id="theme-toggle-container">
+        <button class="theme-toggle" id="themeToggle">
+            <span id="themeIcon">🌙</span> Dark mode
+        </button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const captchaBox = document.getElementById('captchaBox');
+            const captchaText = document.getElementById('captchaText');
+            const captchaOverlay = document.getElementById('captcha-overlay');
+            const shapeVerification = document.getElementById('shapeVerification');
+            const targetShapeInner = document.getElementById('targetShapeInner');
+            const targetShapeContainer = document.getElementById('targetShapeContainer');
+            const shapeOptions = document.getElementById('shapeOptions');
+            const verificationError = document.getElementById('verificationError');
+            const verificationSuccess = document.getElementById('verificationSuccess');
+            const themeToggle = document.getElementById('themeToggle');
+            const themeIcon = document.getElementById('themeIcon');
+            const body = document.body;
+            
+            let isVerified = false;
+            let currentShape = '';
+            const shapes = ['circle', 'triangle', 'square', 'pentagon'];
+            let isDarkTheme = false;
+            
+            const redirectUrl = '/verify_captcha';
+            
+            function checkSystemTheme() {
+                const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+                isDarkTheme = darkModeMediaQuery.matches;
+                
+                if (isDarkTheme) {
+                    body.classList.add('dark-theme');
+                    themeIcon.textContent = '☀️';
+                    themeToggle.innerHTML = '<span id="themeIcon">☀️</span> Light mode';
+                } else {
+                    body.classList.remove('dark-theme');
+                    themeIcon.textContent = '🌙';
+                    themeToggle.innerHTML = '<span id="themeIcon">🌙</span> Dark mode';
+                }
+                
+                darkModeMediaQuery.addEventListener('change', (e) => {
+                    isDarkTheme = e.matches;
+                    if (isDarkTheme) {
+                        body.classList.add('dark-theme');
+                        themeIcon.textContent = '☀️';
+                        themeToggle.innerHTML = '<span id="themeIcon">☀️</span> Light mode';
+                    } else {
+                        body.classList.remove('dark-theme');
+                        themeIcon.textContent = '🌙';
+                        themeToggle.innerHTML = '<span id="themeIcon">🌙</span> Dark mode';
+                    }
+                });
+            }
+            
+            checkSystemTheme();
+            
+            function applyRandomTransform(element) {
+                const rotation = Math.floor(Math.random() * 10) - 5;
+                const scale = 0.9 + Math.random() * 0.2;
+                element.style.transform = `rotate(${rotation}deg) scale(${scale})`;
+            }
+            
+            function resetVerification() {
+                isVerified = false;
+                captchaBox.classList.remove('verified', 'loading');
+                captchaText.classList.remove('verified');
+                captchaText.textContent = "I'm not a robot";
+                shapeVerification.style.display = 'none';
+                verificationError.style.display = 'none';
+                verificationSuccess.style.display = 'none';
+            }
+            
+function handleShapeSelection(option, selectedShape) {
+    if (!isVerified) return;
+    
+    option.classList.add('selected');
+    
+    if (selectedShape === currentShape) {
+        verificationError.style.display = 'none';
+        verificationSuccess.style.display = 'block';
+        verificationSuccess.style.opacity = '1';
+        verificationSuccess.style.transform = 'translateY(0)';
+        
+        // Отправляем запрос на сервер для подтверждения капчи
+        fetch(redirectUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include'  // Важно для работы с сессиями
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                captchaOverlay.style.opacity = '0';
+                setTimeout(() => {
+                    captchaOverlay.style.display = 'none';
+                    document.body.style.overflow = 'auto';
+                    // Перенаправляем на главную страницу
+                    window.location.href = '/';
+                }, 300);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            resetVerification();
+        });
+    } else {
+        option.classList.add('incorrect');
+        verificationError.style.display = 'block';
+        verificationError.style.opacity = '1';
+        verificationError.style.transform = 'translateY(0)';
+        
+        setTimeout(() => {
+            resetVerification();
+        }, 1000);
+    }
+}
+            
+            function shuffleArray(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+                return array;
+            }
+            
+            function setupShapeVerification() {
+                currentShape = shapes[Math.floor(Math.random() * shapes.length)];
+                
+                targetShapeInner.className = 'shape ' + currentShape;
+                applyRandomTransform(targetShapeInner);
+                
+                const shuffledShapes = shuffleArray([...shapes]);
+                shapeOptions.innerHTML = shuffledShapes.map(shape => `
+                    <div class="shape-option" data-shape="${shape}">
+                        <div class="noise-overlay"></div>
+                        <div class="dynamic-noise"></div>
+                        <div class="random-lines"></div>
+                        <div class="color-flicker"></div>
+                        <div class="shape ${shape}"></div>
+                    </div>
+                `).join('');
+                
+                document.querySelectorAll('.shape-option .shape').forEach(shape => {
+                    applyRandomTransform(shape);
+                });
+                
+                document.querySelectorAll('.shape-option').forEach(option => {
+                    option.addEventListener('click', () => {
+                        handleShapeSelection(option, option.dataset.shape);
+                    });
+                });
+                
+                verificationError.style.display = 'none';
+                verificationSuccess.style.display = 'none';
+                verificationError.style.opacity = '0';
+                verificationSuccess.style.opacity = '0';
+                
+                shapeVerification.style.display = 'block';
+                
+                setTimeout(() => {
+                    targetShapeContainer.style.opacity = '1';
+                    targetShapeContainer.style.transform = 'scale(1)';
+                    
+                    setTimeout(() => {
+                        shapeOptions.style.opacity = '1';
+                        shapeOptions.style.transform = 'translateY(0)';
+                    }, 150);
+                }, 50);
+            }
+            
+            function toggleTheme() {
+                isDarkTheme = !isDarkTheme;
+                if (isDarkTheme) {
+                    body.classList.add('dark-theme');
+                    themeIcon.textContent = '☀️';
+                    themeToggle.innerHTML = '<span id="themeIcon">☀️</span> Light mode';
+                } else {
+                    body.classList.remove('dark-theme');
+                    themeIcon.textContent = '🌙';
+                    themeToggle.innerHTML = '<span id="themeIcon">🌙</span> Dark mode';
+                }
+            }
+            
+            themeToggle.addEventListener('click', toggleTheme);
+            
+            captchaBox.addEventListener('click', function() {
+                if (isVerified) return;
+                
+                const verificationTime = Math.floor(Math.random() * 500) + 700;
+                
+                captchaBox.style.setProperty('--progress-time', `${verificationTime}ms`);
+                
+                isVerified = true;
+                captchaBox.classList.add('loading');
+                captchaText.textContent = "Verifying...";
+                
+                setTimeout(() => {
+                    captchaBox.classList.remove('loading');
+                    captchaBox.classList.add('verified');
+                    captchaText.textContent = "Verified";
+                    captchaText.classList.add('verified');
+                    
+                    setTimeout(() => {
+                        setupShapeVerification();
+                    }, 200);
+                }, verificationTime);
+            });
+        });
+    </script>
+</body>
+</html>
